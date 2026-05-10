@@ -11,6 +11,7 @@
   <key>CFBundleLocalizations</key>
   <array>
     <string>en</string>
+    <string>ja</string>
     <string>zh-CN</string>
   </array>
   <key>CFBundlePackageType</key>
