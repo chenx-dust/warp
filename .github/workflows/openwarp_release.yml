@@ -1,8 +1,8 @@
 # OpenWarp 发布流水线 — 在 openWarp 分支上 push tag (v*) 即触发
 #
 # 与上游 create_release.yml 的差异:
-# - 仅 macOS arm64 + macOS Intel + Windows x64 + Linux x86_64(AppImage),
-#   Web/CLI/Universal/Win-arm64/Linux 的 rpm/arch 全砍
+# - 仅 macOS arm64 + macOS Intel + Windows x64/arm64 + Linux x86_64(AppImage),
+#   Web/CLI/Universal/Linux 的 rpm/arch 全砍
 #   (macOS 双架构分别产单架构 DMG 与 CLI tarball;Linux 只产 AppImage/deb/rpm,
 #    不发布上游 Warp 仓库源或签名 key)
 # - 单 channel: preview(由 release_configurations.json 提供配置)
@@ -179,10 +179,18 @@ jobs:
           retention-days: 7
 
   release_windows:
-    name: Build Release (Windows x64)
+    name: Build Release (Windows ${{ matrix.arch }})
     runs-on: windows-latest
     needs: prepare_metadata
     timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            rust_target: x86_64-pc-windows-msvc
+          - arch: arm64
+            rust_target: aarch64-pc-windows-msvc
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -191,20 +199,24 @@ jobs:
       - uses: ./.github/actions/prepare_environment
         with:
           target_os: windows
-          cache_key: x64
+          cache_key: ${{ matrix.arch }}
           is_self_hosted: false
           install_release_deps: true
 
-      - name: Build binary (unsigned)
+      - name: Ensure rust target is installed
+        run: rustup target add ${{ matrix.rust_target }}
+        shell: bash
+
+      - name: Build ${{ matrix.arch }} binary (unsigned)
         id: build_binary
-        run: script/bundle -Channel $CHANNEL -skip_build_installer --arch x64
+        run: script/bundle -Channel $CHANNEL -skip_build_installer --arch ${{ matrix.arch }}
         shell: bash
         env:
           GIT_RELEASE_TAG: ${{ needs.prepare_metadata.outputs.release_tag }}
 
-      - name: Bundle app (unsigned installer)
+      - name: Bundle ${{ matrix.arch }} app (unsigned installer)
         id: bundle_app
-        run: script/bundle -Channel $CHANNEL -skip_build_binary --arch x64
+        run: script/bundle -Channel $CHANNEL -skip_build_binary --arch ${{ matrix.arch }}
         shell: bash
         env:
           GIT_RELEASE_TAG: ${{ needs.prepare_metadata.outputs.release_tag }}
@@ -212,7 +224,7 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: openwarp-windows-x64
+          name: openwarp-windows-${{ matrix.arch }}
           path: ${{ steps.bundle_app.outputs.installer_path }}
           if-no-files-found: error
           retention-days: 7
